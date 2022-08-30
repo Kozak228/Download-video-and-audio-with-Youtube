@@ -1,12 +1,15 @@
-from donload_y_GUI import Ui_MainWindow
 from PyQt6.QtWidgets import QApplication, QMessageBox, QMainWindow, QFileDialog
 from PyQt6.QtCore import QTimer
 
 from validators import url
 from hurry.filesize import size 
+from yt_dlp import YoutubeDL
 
-from qyoutubedl import QYoutubeDL, QHook
+from donload_y_GUI import Ui_MainWindow
+from qyoutubedl import QYoutubeDL
+from QHook import QHook
 from Proverka import proverka_path
+from Duration_in_file import duration_in_file
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -15,18 +18,41 @@ class MainWindow(QMainWindow):
         self.ui.setupUi(self)
 
         self.ui.pushButton_download.setEnabled(False)
+        self.ui.pushButton_info_in_file.setEnabled(False)
 
         self.ui.pushButton_exit.clicked.connect(QApplication.instance().quit)
         self.ui.pushButton_FAQ_link.clicked.connect(self.vvod_FAQ_link)
         self.ui.pushButton_FAQ_put.clicked.connect(self.vvod_FAQ_put)
+        self.ui.lineEdit_link.textChanged.connect(lambda text: self.ui.pushButton_info_in_file.setEnabled(bool(text)))
         self.ui.lineEdit_link.textChanged.connect(lambda text: self.ui.pushButton_download.setEnabled(bool(text)))
         self.ui.pushButton_download.clicked.connect(self.download)
+        self.ui.pushButton_info_in_file.clicked.connect(self.info_file)
         self.ui.pushButton_path_folder.clicked.connect(self.path_folder)
 
         self.ui.radioButton.toggled.connect(lambda: self.btn_state(self.ui.radioButton))
         self.ui.radioButton_2.toggled.connect(lambda: self.btn_state(self.ui.radioButton_2))
 
         self.downloads = QYoutubeDL()
+
+    def info_file(self):
+        link = self.ui.lineEdit_link.text()
+        yt_opts = {'format' : 'mp4/bestaudio/best'}
+
+        if url(link):
+            try:
+                with YoutubeDL(yt_opts) as ydl:
+                    info_file = ydl.extract_info(link, download=False)
+            except:
+                pass
+
+            self.duration = info_file.get("duration", 0)
+
+            self.ui.label_title.setText(info_file.get("title", "Інформації немає"))
+            self.ui.label_time.setText(duration_in_file(self.duration) if self.duration > 0 else 0)
+
+        else:
+            self.msg("Error", "Перевір посилання!")
+            self.ui.lineEdit_link.setText("")
 
     def download(self):
         link = self.ui.lineEdit_link.text()
@@ -91,20 +117,32 @@ class MainWindow(QMainWindow):
             if self.ui.radioButton.isChecked():
                 self.ui.label_progress_2.setText("Sucsess!")
                 self.ui.label_progress_2.setStyleSheet("color: #00008B;")
+        
                 self.msg("Information", f"Відео завантажено!\nШукай тут: {self.link_PC[:-1]}")
 
             if self.ui.radioButton_2.isChecked():
-                self.value = 20   
-                self.ui.label_progress_2.setStyleSheet("color: #00008B;")
-                self.tick_timer()
+                try:
+                    if 0 < self.duration <= 450:
+                        self.value = 18   
+                    elif 450 < self.duration <= 850:
+                        self.value = 25
+                    else:
+                        self.value = 30
+
+                    self.ui.label_progress_2.setStyleSheet("color: #00008B;")
+                    self.tick_timer()
+                except:
+                    self.msg("Error", "Помилка встановить 'FFmpeg'")
 
     def tick_timer(self):
         if self.value >= 0:
-            self.ui.label_progress_2.setText(f"Sucsess!\nNow converting from mp4 to mp3, please wait {self.value} sec...")
-        
+            self.ui.label_progress_2.setText(f"Now converting from mp4 to mp3, please wait {self.value} sec...")
+            # Засекаем таймер - значение в милисекундах
+            # метод singleShot создает поток в фоне, отменить его нельзя
             QTimer().singleShot(1000, self.tick_timer)
             self.value -= 1
         else:
+            self.ui.label_progress_2.setText("Sucsess!")
             self.msg("Information", f"Аудіо завантажено!\nШукай тут: {self.link_PC[:-1]}")
 
     def btn_state(self, b):

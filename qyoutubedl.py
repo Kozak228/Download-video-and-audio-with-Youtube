@@ -1,14 +1,10 @@
 from threading import Thread
-from PyQt6.QtCore import QObject, pyqtSignal 
+
+from PyQt6.QtCore import QObject 
 from PyQt6.QtWidgets import QMessageBox 
 
+from QHook import QHook
 from yt_dlp import YoutubeDL
-
-class QHook(QObject):
-    infoChanged = pyqtSignal(dict)
-
-    def __call__(self, d):
-        self.infoChanged.emit(d.copy())
 
 class QYoutubeDL(QObject):
     def download(self, urls, options):
@@ -18,6 +14,11 @@ class QYoutubeDL(QObject):
         try:
             with YoutubeDL(options) as ydl:
                 ydl.download([urls])
+
+            for hook in options.get("progress_hooks", []):
+                if isinstance(hook, QHook):
+                    hook.deleteLater()
+
         except:
             msg = QMessageBox()
             msg.setWindowTitle("Error")
@@ -25,7 +26,3 @@ class QYoutubeDL(QObject):
             msg.setIcon(QMessageBox.Icon.Warning)
             msg.setStandardButtons(QMessageBox.StandardButton.Ok)
             msg.exec()
-
-        for hook in options.get("progress_hooks", []):
-            if isinstance(hook, QHook):
-                hook.deleteLater()
